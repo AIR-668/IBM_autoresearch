@@ -1,0 +1,38 @@
+FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV UV_PYTHON_DOWNLOADS=never
+ENV UV_PROJECT_ENVIRONMENT=/opt/autoresearch-venv
+ENV UV_LINK_MODE=copy
+ENV PATH=/root/.local/bin:/opt/autoresearch-venv/bin:${PATH}
+
+# CCC rootless Podman accounts do not have subordinate UID/GID ranges.
+# apt normally drops privileges to the _apt user, which cannot be represented
+# in the single-ID user namespace. Keep APT's sandbox user at root so package
+# installation can run in this constrained rootless namespace.
+RUN printf 'APT::Sandbox::User "root";\nAcquire::Retries "5";\n' \
+      > /etc/apt/apt.conf.d/99-ccc-rootless-podman \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        python3.10 \
+        python3.10-dev \
+        python3.10-venv \
+        build-essential \
+        git \
+        curl \
+        ca-certificates \
+        pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
+    && uv --version
+
+WORKDIR /opt/autoresearch-env
+
+COPY .python-version pyproject.toml uv.lock ./
+
+RUN uv sync --frozen
+
+WORKDIR /workspace/IBM_autoresearch
+
+CMD ["/bin/bash"]
